@@ -2918,12 +2918,11 @@ impl AcpThreadView {
         }
 
         let thread = self.as_native_thread(cx)?.read(cx);
-        let _model = thread.model()?;
+        let model = thread.model()?;
 
-        // TODO: restore this guard after testing fast mode
-        // if !model.supports_fast_mode() {
-        //     return None;
-        // }
+        if !model.supports_fast_mode() {
+            return None;
+        }
 
         let (tooltip_label, color, icon) = if matches!(thread.speed(), Some(Speed::Fast)) {
             ("Disable Fast Mode", Color::Muted, IconName::FastForward)

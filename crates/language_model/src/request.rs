@@ -456,6 +456,7 @@ pub struct LanguageModelRequest {
 }
 
 #[derive(Clone, Copy, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum Speed {
     #[default]
     Standard,
