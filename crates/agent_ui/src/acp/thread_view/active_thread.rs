@@ -2935,23 +2935,17 @@ impl AcpThreadView {
             )
         };
 
+        let focus_handle = self.message_editor.focus_handle(cx);
+
         Some(
             IconButton::new("fast-mode", icon)
                 .icon_size(IconSize::Small)
                 .icon_color(color)
-                .tooltip(Tooltip::text(tooltip_label))
+                .tooltip(move |_, cx| {
+                    Tooltip::for_action_in(tooltip_label, &ToggleFastMode, &focus_handle, cx)
+                })
                 .on_click(cx.listener(move |this, _, _window, cx| {
-                    if let Some(thread) = this.as_native_thread(cx) {
-                        thread.update(cx, |thread, cx| {
-                            thread.set_speed(
-                                thread
-                                    .speed()
-                                    .map(|speed| speed.toggle())
-                                    .unwrap_or(Speed::Fast),
-                                cx,
-                            );
-                        });
-                    }
+                    this.toggle_fast_mode(cx);
                 }))
                 .into_any_element(),
         )
@@ -7311,6 +7305,20 @@ impl AcpThreadView {
         });
     }
 
+    fn toggle_fast_mode(&mut self, cx: &mut Context<Self>) {
+        if let Some(thread) = self.as_native_thread(cx) {
+            thread.update(cx, |thread, cx| {
+                thread.set_speed(
+                    thread
+                        .speed()
+                        .map(|speed| speed.toggle())
+                        .unwrap_or(Speed::Fast),
+                    cx,
+                );
+            });
+        }
+    }
+
     fn cycle_thinking_effort(&mut self, cx: &mut Context<Self>) {
         let Some(thread) = self.as_native_thread(cx) else {
             return;
@@ -7415,6 +7423,9 @@ impl Render for AcpThreadView {
             .on_action(cx.listener(Self::handle_select_permission_granularity))
             .on_action(cx.listener(Self::open_permission_dropdown))
             .on_action(cx.listener(Self::open_add_context_menu))
+            .on_action(cx.listener(|this, _: &ToggleFastMode, _window, cx| {
+                this.toggle_fast_mode(cx);
+            }))
             .on_action(cx.listener(|this, _: &ToggleThinkingMode, _window, cx| {
                 if let Some(thread) = this.as_native_thread(cx) {
                     thread.update(cx, |thread, cx| {
