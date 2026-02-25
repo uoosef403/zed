@@ -316,7 +316,7 @@ fn tests() -> Step<Use> {
     named::uses("namespacelabs", "breakpoint-action", "v0")
         .if_condition(Expression::new("failure()"))
         .add_with(("duration", "15m"))
-        .add_with(("user", "MrSubidubi"))
+        .add_with(("authorized-users", "MrSubidubi"))
 }
 
 fn check_dependencies() -> NamedJob {
