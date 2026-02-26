@@ -1447,7 +1447,7 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
     fn DrawGlyphRun(
         &self,
         clientdrawingcontext: *const ::core::ffi::c_void,
-        _baselineoriginx: f32,
+        baselineoriginx: f32,
         _baselineoriginy: f32,
         _measuringmode: DWRITE_MEASURING_MODE,
         glyphrun: *const DWRITE_GLYPH_RUN,
@@ -1491,10 +1491,15 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
         let cluster_map =
             unsafe { std::slice::from_raw_parts(desc.clusterMap, desc.stringLength as usize) };
 
+        let is_rtl = glyphrun.bidiLevel & 1 != 0;
+
         let mut cluster_analyzer = ClusterAnalyzer::new(cluster_map, glyph_count);
         let mut utf16_idx = desc.textPosition as usize;
         let mut glyph_idx = 0;
         let mut glyphs = Vec::with_capacity(glyph_count);
+        // For RTL runs, baselineoriginx is the right edge of the run;
+        // glyphs are positioned leftward. For LTR runs, it's the left edge.
+        let mut run_x = baselineoriginx;
         for (cluster_utf16_len, cluster_glyph_count) in cluster_analyzer {
             context.index_converter.advance_to_utf16_ix(utf16_idx);
             utf16_idx += cluster_utf16_len;
@@ -1507,18 +1512,40 @@ impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
                 let is_emoji = color_font
                     && is_color_glyph(font_face, id, &context.text_system.components.factory);
                 let this_glyph_idx = glyph_idx + cluster_glyph_idx;
-                glyphs.push(ShapedGlyph {
-                    id,
-                    position: point(
-                        px(context.width + glyph_offsets[this_glyph_idx].advanceOffset),
-                        px(0.0),
-                    ),
-                    index: context.index_converter.utf8_ix,
-                    is_emoji,
-                });
-                context.width += glyph_advances[this_glyph_idx];
+                if is_rtl {
+                    // RTL: advance leftward first, then position
+                    run_x -= glyph_advances[this_glyph_idx];
+                    glyphs.push(ShapedGlyph {
+                        id,
+                        position: point(
+                            px(run_x + glyph_offsets[this_glyph_idx].advanceOffset),
+                            px(0.0),
+                        ),
+                        index: context.index_converter.utf8_ix,
+                        is_emoji,
+                    });
+                } else {
+                    // LTR: position first, then advance rightward
+                    glyphs.push(ShapedGlyph {
+                        id,
+                        position: point(
+                            px(run_x + glyph_offsets[this_glyph_idx].advanceOffset),
+                            px(0.0),
+                        ),
+                        index: context.index_converter.utf8_ix,
+                        is_emoji,
+                    });
+                    run_x += glyph_advances[this_glyph_idx];
+                }
             }
             glyph_idx += cluster_glyph_count;
+        }
+        // Update total width: track the rightmost edge seen across all runs.
+        // For LTR runs, run_x is now the right edge. For RTL runs,
+        // baselineoriginx was the right edge.
+        let run_right_edge = if is_rtl { baselineoriginx } else { run_x };
+        if run_right_edge > context.width {
+            context.width = run_right_edge;
         }
         context.runs.push(ShapedRun { font_id, glyphs });
         Ok(())
